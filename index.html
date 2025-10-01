@@ -1,0 +1,192 @@
+
+<html>
+<head>
+<link rel="stylesheet" href="leaflet.css" />
+<script src="leaflet.js"></script>
+<script src="PLS_Veg.js"></script>
+<script src="PLSS_Grid.js"></script>
+<link rel="stylesheet" href="header_style.css"/>
+<link rel="stylesheet" href="L.Control.Layers.Tree.css"/>
+<script src="L.Control.Layers.Tree.js"></script>
+
+<style>
+   #map{ height: 100%; }
+  </style>
+    
+</head>
+
+<body>
+
+<div class="div-1"> 
+    
+<h2 style=color:darkblue> PLSS Notes and Land Patent Finder for Wisconsin</h2>
+
+<p><img name="Langlade_plat_map.jpg" src="images/Langlade_plat_map.jpg" width="100%" height="auto" alt="Langlade County Plat Map"></p>
+    
+<p>Image: A small part of a hand-drawn plat map, showing land ownership in a northern Wisconsin County in the 1950s</p>
+
+<p><b>Acknowledgements:</b> Background maps from <a href="https://www.openstreetmap.org/copyright">Open Street Map</a> contributors, and courtesy <a href="https://usgs.gov/">US Geological Survey</a>. PLSS and vegetation map from Wisconsin DNR.</p>
+    
+</div>
+
+<div id="map"></div>
+
+
+<script>
+    
+//Create four background layers using static tile data
+var OpenStreetMap_Mapnik = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+	maxZoom: 19,
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+});
+    
+var OpenTopoMap=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+	maxZoom: 17,
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+});
+    
+var USGS_USImagery = L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}', {
+	maxZoom: 20,
+	attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
+});
+    
+var USGS_USTopo = L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}', {
+	maxZoom: 20,
+	attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
+});
+      
+
+//Popup text for PLS-based vegetation layer
+function PLSVegPopup(feature, layer) {
+        layer.bindPopup("Vegetation from PLS notes: "+feature.properties.VegValue)
+} 
+
+//Converts code for direction from principle meridian in PLSS layer to E or W
+//All townships in Wisconsin are N so no need to do this for N and S
+function meridDir(t){
+        if(t === "4") return "E";
+        if(t === "2") return "W";
+          return "null";
+} 
+
+//Removes leading 0 in text-format range and township numbers < 10
+function fixNums(n){
+        if(n === "01") return "1";
+        if(n === "02") return "2";
+        if(n === "03") return "3";
+        if(n === "04") return "4"
+        if(n === "05") return "5";
+        if(n === "06") return "6";
+        if(n === "07") return "7";
+        if(n === "08") return "8";
+        if(n === "09") return "9";
+        if(n === "10") return "10";
+        return n;
+} 
+
+//Popup text for PLSS layer, generated from feature properties after conversion to GeoJSON
+//Also generates links to searches in BLM GLO database and UW Libraries collection of //PLSS notes
+function PLSSPopup(feature, layer) {
+        layer.bindPopup("<b>PLSS Description</b><br>Township:"+fixNums(feature.properties.township_n)+"N<br>Range:"+fixNums(feature.properties.range_num)+meridDir(feature.properties.merid_dir)+"<br>Section:"+fixNums(feature.properties.section_nu)+"<br><a href='https://glorecords.blm.gov/results/default.aspx?searchCriteria=type=patent|st=WI|cty=|twp_nr="+fixNums(feature.properties.township_n)+"|twp_dir=N|rng_nr="+fixNums(feature.properties.range_num)+"|rng_dir="+meridDir(feature.properties.merid_dir)+"|sp=true|sw=true|sadv=false#resultsTabIndex=0&page=1&sortField=6&sortDir=0' target='_blank'>Link to township land patents</a><br><a href='https://digicoll.library.wisc.edu/cgi-bin/SurveyNotes/SurveyNotes-idx?type=PLSS&town=T0"+feature.properties.township_n+"N&range=R0"+feature.properties.range_num+meridDir(feature.properties.merid_dir)+"&sect=&size=First+100'target='_blank'>Link to township PLSS Notes</a>")
+} 
+    
+//Colors for PLS vegetation polygons
+function getColor(d) {
+          if(d === 1) return '#abd9e9';
+          if(d === 2) return '#003c30';
+          if(d === 3) return '#01665e';
+          if(d === 4) return '#35978f';
+          if(d === 5) return '#80cdc1';
+          if(d === 6) return '#c7eae5';
+          if(d === 7) return '#f5f5f5';
+          if(d === 8) return '#f6e8c3';
+          if(d === 9) return '#dfc27d';
+          if(d === 10) return '#bf812d';
+          if(d === 11) return '#8c510a';
+          if(d === 12) return '#543005';
+          return '#a6d96a';
+}
+
+//Style for PLS vegetation polygons
+function style(feature) {
+    return {
+        fillColor: getColor(feature.properties.Group_code),
+        weight: 1,
+        opacity: 0.2,
+        color: getColor(feature.properties.Group_code),
+        fillOpacity: 0.2
+    };
+}
+
+//Style for PLSS grid
+var PLSStyle = {
+    "color": "#00FF00",
+    "weight": 1,
+    "opacity": 0.5,
+    "fillOpacity": 0.0
+};
+   
+//Creates PLS-based vegetation layer
+var PLSVeg = L.geoJson(PLS_Veg, {
+    style: style,
+    onEachFeature: PLSVegPopup
+});
+
+//Creates PLSS grid layer  
+var PLSS = L.geoJson(PLSS, {
+    style: PLSStyle,
+   onEachFeature: PLSSPopup
+});
+    
+
+//Creates map, adds one basemap and one overlay
+var map = L.map('map', {
+    center: [42.71, -89.52],
+    zoom: 12,
+    zoomSnap: 0.1,
+    zoomDelta: 0.5,
+    layers: [OpenStreetMap_Mapnik, PLSS]
+});
+
+/*var baseTree = {
+    label: 'Base Layers',
+    children: [
+                { label: 'OpenStreetMap', layer: OpenStreetMap_Mapnik },
+                { label: 'OpenTopoMap', layer: OpenTopoMap },
+                { label: 'USGS Satellite', layer: USGS_USImagery },
+                { label: 'USGS Topo Map', layer: USGS_USTopo },
+            ]
+};
+var overlaysTree = {
+    label: 'Data Layers',
+    children: [    
+                { label: 'PLSS Sections', layer: PLSS },
+                { label: 'PLS Vegetation', layer: PLSVeg },
+                { label: 'Property Parcels', layer: Sawyer_Parcels },
+            ]
+};*/
+
+//Creates basemap group
+var baseMaps = {
+   "Open Street Map": OpenStreetMap_Mapnik,
+    "Satellite": USGS_USImagery,
+    "Open TopoMap": OpenTopoMap,
+    "USGS_USTopo": USGS_USTopo,
+};
+
+//Creates overlay layer group
+var overlayMaps = {
+    "Vegetation from PLS": PLSVeg,
+    "PLSS Grid": PLSS,
+};
+
+//var layerControl = L.control.layers(baseMaps, overlayMaps).addTo(map);
+    
+//Adds layer control and scale bar
+//L.control.layers.tree(baseTree, overlaysTree).addTo(map);
+L.control.layers(baseMaps, overlayMaps).addTo(map);
+L.control.scale().addTo(map);
+          
+</script>
+<body>
+</html>
